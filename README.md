@@ -35,3 +35,15 @@ In this project, database migrations are automatically executed inside `main.go`
 The current database connection string is built manually from environment variables
 * **Impact:** If the `DB_PASSWORD` contains URL-reserved special characters (such as `@`, `:`, `/`, `?`, `#`), the connection URL parsing will break.
 * **Mitigation:** For this case project, standard alphanumeric values (like `1234` or `changeme`) are assumed. In a production-grade system, the password string must be sanitized using Go's `net/url.QueryEscape()` before building the connection string to prevent syntax errors.
+
+## Development
+
+### Run Tests
+To run the domain package tests, use the following command:
+```bash
+go test -v ./internal/domain
+```
+To run the config tests, use the following command:
+```bash
+go test -v ./internal/config
+```
