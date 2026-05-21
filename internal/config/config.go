@@ -45,8 +45,8 @@ type PredictionConfig struct {
 // Config. It fails fast so misconfigured deployments surface errors at boot.
 func Load() (*Config, error) {
 	dbPassword, ok := os.LookupEnv("DB_PASSWORD")
-	if !ok {
-		return nil, errors.New("DB_PASSWORD is required")
+	if !ok || dbPassword == "" {
+		return nil, errors.New("DB_PASSWORD is required and cannot be empty")
 	}
 
 	// Server

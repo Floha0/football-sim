@@ -39,7 +39,8 @@ func TestLoad_ValidEnv(t *testing.T) {
 }
 
 func TestLoad_MissingRequiredFields(t *testing.T) {
-	// DB_PASSWORD set edilmediğinde hata vermelidir
+	t.Setenv("DB_PASSWORD", "")
+
 	_, err := config.Load()
 	if err == nil {
 		t.Error("Expected error due to missing DB_PASSWORD, got nil")
