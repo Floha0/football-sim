@@ -61,7 +61,13 @@ func run() error {
 	}
 	logger.Info("migrations applied")
 
-	// 6. Build a minimal HTTP server for now.
+	// 6. Initialize database repositories backed by pgxpool.
+	teamRepo := postgres.NewTeamRepo(pool)
+	matchRepo := postgres.NewMatchRepo(pool)
+	_ = teamRepo  // will be used
+	_ = matchRepo // will be used
+
+	// 7. Build a minimal HTTP server for now.
 	// Real routes and handlers come in later commits.
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -74,13 +80,27 @@ func run() error {
 		_, _ = w.Write([]byte("ok"))
 	})
 
+	// Temporary diagnostic endpoint to verify Repository layer & Seeding data.
+	// This confirms pgx connection pooling, data scanning, and error translation work.
+	mux.HandleFunc("GET /health/teams", func(w http.ResponseWriter, r *http.Request) {
+		teams, err := teamRepo.GetAll(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprintf(w, "found %d teams\n", len(teams))
+		for _, t := range teams {
+			fmt.Fprintf(w, "  - %s (power=%d)\n", t.Name, t.Power)
+		}
+	})
+
 	server := &http.Server{
 		Addr:              ":" + cfg.Server.Port,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	// 7. Start the server in a goroutine so we can listen for shutdown signals.
+	// 8. Start the server in a goroutine so we can listen for shutdown signals.
 	serverErrCh := make(chan error, 1)
 	go func() {
 		logger.Info("http server listening", "addr", server.Addr)
@@ -91,7 +111,7 @@ func run() error {
 		serverErrCh <- nil
 	}()
 
-	// 8. Wait for either a shutdown signal or a server error.
+	// 9. Wait for either a shutdown signal or a server error.
 	select {
 	case <-ctx.Done():
 		logger.Info("shutdown signal received")
@@ -101,7 +121,7 @@ func run() error {
 		}
 	}
 
-	// 9. Gracefully shut down the HTTP server within the configured timeout.
+	// 10. Gracefully shut down the HTTP server within the configured timeout.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer cancel()
 
