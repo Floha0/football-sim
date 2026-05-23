@@ -12,7 +12,7 @@ The application configures itself using environment variables. You can create a 
 | `DB_HOST` | PostgreSQL server host address | `localhost` | `string` |
 | `DB_PORT` | PostgreSQL server port | `5432` | `string` |
 | `DB_USER` | Database username | `insider` | `string` |
-| `DB_PASSWORD` | Database password | `changeme` | `string` |
+| `DB_PASSWORD` | Database password | required | `string` |
 | `DB_NAME` | Target database name | `insider_league` | `string` |
 | `DB_SSLMODE` | PostgreSQL SSL mode (`disable`, `require`, etc.) | `disable` | `string` |
 | `SIM_HOME_ADVANTAGE` | Power multiplier for the home team advantage | `1.15` | `float64` |
@@ -23,11 +23,11 @@ The application configures itself using environment variables. You can create a 
 
 ## Design Decisions & Trade-offs
 
-### 1. Database Migrations on Application Startup
-In this project, database migrations are automatically executed inside `main.go` during the application bootstrap phase. 
-* **Pros:** Provides a seamless, zero-friction local development experience. The database auto-initializes itself on the very first `make run` or `go run` command.
-* **Cons (Production Reality):** In a production environment with horizontal scaling (multiple replicas/pods), having every container attempt to run migrations simultaneously on boot can cause severe lock contention. Furthermore, rolling back schemas requires a full code deployment cycle.
-* **Production Alternative:** In a real-world cloud environment, migrations should be decoupled from application startup and managed via a CI/CD deployment pipeline, a Kubernetes `initContainer`, or a dedicated one-off migration job.
+### Database Migrations
+
+For local development, migrations are applied automatically at startup which keeps setup simple for the case project.
+
+In production, normally I would run migrations separately through CI/CD or a one-off deployment job to avoid multiple application instances trying to migrate the database at the same time.
 
 ## Known Limitations
 
