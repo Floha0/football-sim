@@ -9,12 +9,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/Floha0/football-sim/internal/config"
+	"github.com/Floha0/football-sim/internal/league"
 	"github.com/Floha0/football-sim/internal/postgres"
+	"github.com/Floha0/football-sim/internal/prediction"
+	"github.com/Floha0/football-sim/internal/simulation"
 )
 
 func main() {
@@ -61,11 +65,14 @@ func run() error {
 	}
 	logger.Info("migrations applied")
 
-	// 6. Initialize database repositories backed by pgxpool.
+	// 6. Construct repositories.
 	teamRepo := postgres.NewTeamRepo(pool)
 	matchRepo := postgres.NewMatchRepo(pool)
-	_ = teamRepo  // will be used
-	_ = matchRepo // will be used
+
+	simulator := simulation.NewPoissonSimulator(cfg.Simulation, nil)
+	predictor := prediction.NewMonteCarloPredictor(cfg.Prediction, simulator)
+	leagueService := league.NewService(teamRepo, matchRepo, simulator, predictor)
+	_ = leagueService // wired into HTTP handlers in the next commit
 
 	// 7. Build a minimal HTTP server for now.
 	// Real routes and handlers come in later commits.
@@ -92,6 +99,70 @@ func run() error {
 		for _, t := range teams {
 			fmt.Fprintf(w, "  - %s (power=%d)\n", t.Name, t.Power)
 		}
+	})
+
+	mux.HandleFunc("POST /debug/init", func(w http.ResponseWriter, r *http.Request) {
+		if err := leagueService.GenerateFixtures(r.Context()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprintln(w, "fixtures generated")
+	})
+
+	mux.HandleFunc("POST /debug/play-all", func(w http.ResponseWriter, r *http.Request) {
+		result, err := leagueService.PlayAll(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprintf(w, "played %d weeks\n", len(result))
+	})
+
+	mux.HandleFunc("GET /debug/standings", func(w http.ResponseWriter, r *http.Request) {
+		standings, err := leagueService.GetStandings(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for i, s := range standings {
+			fmt.Fprintf(w, "%d. team=%d P=%d W=%d D=%d L=%d GF=%d GA=%d GD=%d Pts=%d\n",
+				i+1, s.TeamID, s.Played, s.Wins, s.Draws, s.Losses,
+				s.GoalsFor, s.GoalsAgainst, s.GoalDiff(), s.Points)
+		}
+	})
+
+	mux.HandleFunc("GET /debug/predictions", func(w http.ResponseWriter, r *http.Request) {
+		preds, err := leagueService.Predict(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for _, p := range preds {
+			fmt.Fprintf(w, "team=%d chance=%.2f%% (week %d)\n", p.TeamID, p.Chance*100, p.Week)
+		}
+	})
+
+	mux.HandleFunc("POST /debug/play-n", func(w http.ResponseWriter, r *http.Request) {
+		n, _ := strconv.Atoi(r.URL.Query().Get("weeks"))
+		if n <= 0 {
+			n = 4
+		}
+		for i := 0; i < n; i++ {
+			_, _, err := leagueService.PlayWeek(r.Context())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		fmt.Fprintf(w, "played %d weeks\n", n)
+	})
+
+	mux.HandleFunc("POST /debug/reset", func(w http.ResponseWriter, r *http.Request) {
+		if err := leagueService.Reset(r.Context()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprintln(w, "league reset; fixtures regenerated")
 	})
 
 	server := &http.Server{
