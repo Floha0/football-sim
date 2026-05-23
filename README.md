@@ -6,6 +6,17 @@ Generates a round-robin fixture, plays matches using a Poisson-based simulator, 
 
 **Tech stack:** Go 1.26+, PostgreSQL, pgx, golang-migrate, log/slog
 
+## Live Demo
+
+A deployed instance is running at:  
+**https://football-sim-production-abc1.up.railway.app**
+
+Try it:
+```bash
+curl -X POST https://football-sim-production-abc1.up.railway.app/api/reset
+curl https://football-sim-production-abc1.up.railway.app/api/standings | jq
+```
+
 ## Quick Start
 
 ### Option A — Full stack via Docker
