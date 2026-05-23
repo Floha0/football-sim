@@ -7,11 +7,13 @@ import "errors"
 var (
 	ErrNotFound = errors.New("resource not found")
 
-	ErrDuplicateFixture = errors.New("duplicate fixture for week")
+	ErrDuplicateFixture = errors.New("duplicate fixture")
 
 	ErrInvalidMatch = errors.New("invalid match")
 
 	ErrTeamNameTaken = errors.New("team name already taken")
 
 	ErrSeasonComplete = errors.New("season complete")
+
+	ErrFixturesAlreadyExist = errors.New("fixtures already exist")
 )
