@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/Floha0/football-sim/internal/config"
+	"github.com/Floha0/football-sim/internal/handler"
 	"github.com/Floha0/football-sim/internal/league"
 	"github.com/Floha0/football-sim/internal/postgres"
 	"github.com/Floha0/football-sim/internal/prediction"
@@ -74,104 +74,27 @@ func run() error {
 	leagueService := league.NewService(teamRepo, matchRepo, simulator, predictor)
 	_ = leagueService // wired into HTTP handlers in the next commit
 
-	// 7. Build a minimal HTTP server for now.
-	// Real routes and handlers come in later commits.
+	// 7. Construct HTTP handler and wire routes.
+	apiHandler := handler.New(leagueService)
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		if err := pool.Ping(r.Context()); err != nil {
-			logger.Error("health check failed", "err", err)
-			http.Error(w, "database unreachable", http.StatusServiceUnavailable)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+	apiHandler.RegisterRoutes(mux)
 
-	// Temporary diagnostic endpoint to verify Repository layer & Seeding data.
-	// This confirms pgx connection pooling, data scanning, and error translation work.
-	mux.HandleFunc("GET /health/teams", func(w http.ResponseWriter, r *http.Request) {
-		teams, err := teamRepo.GetAll(r.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		fmt.Fprintf(w, "found %d teams\n", len(teams))
-		for _, t := range teams {
-			fmt.Fprintf(w, "  - %s (power=%d)\n", t.Name, t.Power)
-		}
-	})
-
-	mux.HandleFunc("POST /debug/init", func(w http.ResponseWriter, r *http.Request) {
-		if err := leagueService.GenerateFixtures(r.Context()); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		fmt.Fprintln(w, "fixtures generated")
-	})
-
-	mux.HandleFunc("POST /debug/play-all", func(w http.ResponseWriter, r *http.Request) {
-		result, err := leagueService.PlayAll(r.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		fmt.Fprintf(w, "played %d weeks\n", len(result))
-	})
-
-	mux.HandleFunc("GET /debug/standings", func(w http.ResponseWriter, r *http.Request) {
-		standings, err := leagueService.GetStandings(r.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		for i, s := range standings {
-			fmt.Fprintf(w, "%d. team=%d P=%d W=%d D=%d L=%d GF=%d GA=%d GD=%d Pts=%d\n",
-				i+1, s.TeamID, s.Played, s.Wins, s.Draws, s.Losses,
-				s.GoalsFor, s.GoalsAgainst, s.GoalDiff(), s.Points)
-		}
-	})
-
-	mux.HandleFunc("GET /debug/predictions", func(w http.ResponseWriter, r *http.Request) {
-		preds, err := leagueService.Predict(r.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		for _, p := range preds {
-			fmt.Fprintf(w, "team=%d chance=%.2f%% (week %d)\n", p.TeamID, p.Chance*100, p.Week)
-		}
-	})
-
-	mux.HandleFunc("POST /debug/play-n", func(w http.ResponseWriter, r *http.Request) {
-		n, _ := strconv.Atoi(r.URL.Query().Get("weeks"))
-		if n <= 0 {
-			n = 4
-		}
-		for i := 0; i < n; i++ {
-			_, _, err := leagueService.PlayWeek(r.Context())
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-		fmt.Fprintf(w, "played %d weeks\n", n)
-	})
-
-	mux.HandleFunc("POST /debug/reset", func(w http.ResponseWriter, r *http.Request) {
-		if err := leagueService.Reset(r.Context()); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		fmt.Fprintln(w, "league reset; fixtures regenerated")
-	})
+	// 8. Apply middleware in explicit order. The first listed is outermost.
+	//    Outermost catches panics; inner middleware then runs.
+	rootHandler := handler.Chain(mux,
+		handler.WithRequestID,
+		handler.WithLogging,
+		handler.WithRecovery,
+	)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Server.Port,
-		Handler:           mux,
+		Handler:           rootHandler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	// 8. Start the server in a goroutine so we can listen for shutdown signals.
+	// 9. Start the server in a goroutine so we can listen for shutdown signals.
 	serverErrCh := make(chan error, 1)
 	go func() {
 		logger.Info("http server listening", "addr", server.Addr)
@@ -182,7 +105,7 @@ func run() error {
 		serverErrCh <- nil
 	}()
 
-	// 9. Wait for either a shutdown signal or a server error.
+	// 10. Wait for either a shutdown signal or a server error.
 	select {
 	case <-ctx.Done():
 		logger.Info("shutdown signal received")
@@ -192,7 +115,7 @@ func run() error {
 		}
 	}
 
-	// 10. Gracefully shut down the HTTP server within the configured timeout.
+	// 11. Gracefully shut down the HTTP server within the configured timeout.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer cancel()
 
