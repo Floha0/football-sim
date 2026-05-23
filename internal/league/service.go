@@ -24,14 +24,18 @@ type Service struct {
 	predictor Predictor
 }
 
-// NewService constructs a Service with explicit dependencies. All
-// arguments must be non-nil; the constructor does not validate.
+// NewService constructs a Service with the given dependencies.
+// All arguments must be non-nil; passing nil panics, since a Service
+// without its collaborators cannot function.
 func NewService(
 	teams TeamRepository,
 	matches MatchRepository,
 	simulator simulation.MatchSimulator,
 	predictor Predictor,
 ) *Service {
+	if teams == nil || matches == nil || simulator == nil || predictor == nil {
+		panic("league.NewService: all dependencies must be non-nil")
+	}
 	return &Service{
 		teams:     teams,
 		matches:   matches,
@@ -49,7 +53,7 @@ func (s *Service) GenerateFixtures(ctx context.Context) error {
 		return fmt.Errorf("check existing fixtures: %w", err)
 	}
 	if len(existing) > 0 {
-		return fmt.Errorf("fixtures already exist; call Reset first")
+		return ErrFixturesAlreadyExist
 	}
 
 	teams, err := s.teams.GetAll(ctx)
