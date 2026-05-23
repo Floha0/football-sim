@@ -35,6 +35,12 @@ For local development, migrations are applied automatically at startup which kee
 
 In production, normally I would run migrations separately through CI/CD or a one-off deployment job to avoid multiple application instances trying to migrate the database at the same time.
 
+### API Conventions
+
+- All errors return JSON in the form `{"error": "...", "code": "..."}`
+- Unknown routes and method mismatches both return 404 to maintain JSON consistency
+- A future improvement would use a router (e.g. chi) that supports custom 405 handlers
+
 ## Known Limitations
 
 ### Special Characters in Database Password
