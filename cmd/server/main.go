@@ -72,7 +72,6 @@ func run() error {
 	simulator := simulation.NewPoissonSimulator(cfg.Simulation, nil)
 	predictor := prediction.NewMonteCarloPredictor(cfg.Prediction, simulator)
 	leagueService := league.NewService(teamRepo, matchRepo, simulator, predictor)
-	_ = leagueService // wired into HTTP handlers in the next commit
 
 	// 7. Construct HTTP handler and wire routes.
 	apiHandler := handler.New(leagueService)
@@ -81,7 +80,10 @@ func run() error {
 	apiHandler.RegisterRoutes(mux)
 
 	// 8. Apply middleware in explicit order. The first listed is outermost.
-	//    Outermost catches panics; inner middleware then runs.
+	//    Order matters:
+	//      - WithRequestID attaches the ID before anything else reads it
+	//      - WithLogging defers its log line so it sees the final status
+	//      - WithRecovery converts panics into 500 responses before logging reads status
 	rootHandler := handler.Chain(mux,
 		handler.WithRequestID,
 		handler.WithLogging,
