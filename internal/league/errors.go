@@ -12,4 +12,6 @@ var (
 	ErrInvalidMatch = errors.New("invalid match")
 
 	ErrTeamNameTaken = errors.New("team name already taken")
+
+	ErrSeasonComplete = errors.New("season complete")
 )
