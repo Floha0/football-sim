@@ -44,6 +44,10 @@ func NewService(
 	}
 }
 
+func (s *Service) GetTeams(ctx context.Context) ([]domain.Team, error) {
+	return s.teams.GetAll(ctx)
+}
+
 // GenerateFixtures creates the full round-robin schedule for all registered
 // teams. Returns an error if fixtures already exist, call Reset first to
 // regenerate.
