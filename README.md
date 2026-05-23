@@ -1,6 +1,12 @@
 # football-sim
 Insider Long term internship backend case
 
+## Prerequisites
+
+- **Go 1.22 or later**
+- **Docker and Docker Compose** for the PostgreSQL container
+- **`golang-migrate` CLI** for running migrations:
+
 ## Environment Variables
 
 The application configures itself using environment variables. You can create a `.env` file in the root directory based on the `.env.example` provided.
