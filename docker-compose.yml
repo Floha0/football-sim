@@ -18,6 +18,33 @@ services:
       retries: 5
       start_period: 10s
 
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: insider_app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Inside the compose network, the DB is reachable by its service name.
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-insider}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      DB_NAME: ${DB_NAME:-insider_league}
+      DB_SSLMODE: disable
+      PORT: 8080
+      SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-10s}
+      SIM_HOME_ADVANTAGE: ${SIM_HOME_ADVANTAGE:-1.15}
+      SIM_AVG_GOALS: ${SIM_AVG_GOALS:-2.75}
+      SIM_MAX_GOALS: ${SIM_MAX_GOALS:-10}
+      PREDICTION_ITERATIONS: ${PREDICTION_ITERATIONS:-10000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${PORT:-8080}:8080"
+
 volumes:
   postgres_data:
     name: insider_postgres_data

@@ -30,7 +30,7 @@ The server listens on `http://localhost:8000`. See [API Endpoints](#api-endpoint
 
 ## Prerequisites
 
-- **Go 1.22 or later**
+- **Go 1.26 or later**
 - **Docker and Docker Compose** for the PostgreSQL container
 - **`golang-migrate` CLI** for running migrations:
 ```bash
